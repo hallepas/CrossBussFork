@@ -146,7 +146,7 @@ export function ConnectionDialog({ open, busy, error, onClose, onSave, initial }
               <label className="wide">
                 <span>Fully qualified namespace</span>
                 <input
-                  required={!initial?.hasStoredSecret}
+                  required
                   value={form.fullyQualifiedName}
                   onChange={(event) =>
                     setForm({ ...form, fullyQualifiedName: event.target.value })
@@ -158,15 +158,19 @@ export function ConnectionDialog({ open, busy, error, onClose, onSave, initial }
               <label className="wide">
                 <span>Connection string</span>
                 <textarea
-                  required
+                  required={!initial?.hasStoredSecret}
                   rows={4}
                   value={form.connectionString}
                   onChange={(event) =>
                     setForm({ ...form, connectionString: event.target.value })
                   }
-                  placeholder="Endpoint=sb://…"
+                  placeholder={
+                    initial?.hasStoredSecret
+                      ? "•••••• stored in the local backend — leave blank to keep it"
+                      : "Endpoint=sb://…"
+                  }
                 />
-                {initial?.hasStoredSecret && <em className="input-hint">Leave blank to keep the stored connection string.</em>}
+                {initial?.hasStoredSecret && <em className="input-hint">The saved secret is never sent to the UI. Leave this blank to keep it and only change the other fields.</em>}
               </label>
             )}
 

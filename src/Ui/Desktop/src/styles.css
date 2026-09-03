@@ -53,22 +53,22 @@ button { color: inherit; }
 .rail-button:hover, .rail-button.active { color: #e9fffc; background: #24313a; }
 .rail-button.active { box-shadow: inset 3px 0 #35c9b8; }
 .rail-spacer { flex: 1; }
-.workspace { display: grid; grid-template-columns: 310px 6px minmax(0, 1fr); min-width: 0; flex: 1; }
+.workspace { display: grid; grid-template-columns: 310px 6px minmax(0, 1fr); grid-template-rows: 100%; min-width: 0; min-height: 0; flex: 1; }
 
-.resource-panel { background: var(--surface-soft); min-width: 0; display: flex; flex-direction: column; }
+.resource-panel { background: var(--surface-soft); min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .resource-resizer { position: relative; width: 6px; height: 100%; padding: 0; border: 0; border-left: 1px solid var(--border); outline: 0; cursor: col-resize; touch-action: none; background: var(--surface-soft); }
 .resource-resizer::before { content: ""; position: absolute; inset: 0 -3px; }
 .resource-resizer span { position: absolute; top: 50%; left: 1px; width: 3px; height: 38px; border-radius: 3px; background: var(--border-strong); opacity: 0; transform: translateY(-50%); transition: opacity .14s ease, background .14s ease; }
 .resource-resizer:hover span, .resource-resizer:focus-visible span, .workspace.is-resizing .resource-resizer span { opacity: 1; background: var(--accent); }
 .resource-resizer:focus-visible { box-shadow: inset 2px 0 var(--accent); }
 .workspace.is-resizing, .workspace.is-resizing * { cursor: col-resize !important; user-select: none !important; }
-.panel-heading { padding: 20px 18px 13px; display: flex; align-items: center; justify-content: space-between; }
+.panel-heading { flex: 0 0 auto; padding: 20px 18px 13px; display: flex; align-items: center; justify-content: space-between; }
 .panel-heading h2, .jobs-panel h2, .card h2 { margin: 2px 0 0; font-size: 18px; letter-spacing: -.02em; }
 .eyebrow { display: block; color: var(--accent); text-transform: uppercase; letter-spacing: .115em; font-size: 10px; font-weight: 700; }
-.search-box { margin: 0 14px 12px; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; color: var(--subtle); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.search-box { flex: 0 0 auto; margin: 0 14px 12px; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; color: var(--subtle); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
 .search-box input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
-.resource-tree { overflow: auto; padding: 0 8px 20px; }
+.resource-tree { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 0 8px 20px; }
 .connection-folder { margin-bottom: 9px; }
 .connection-folder-label { min-height: 25px; padding: 0 9px; display: flex; align-items: center; gap: 6px; color: var(--subtle); text-transform: uppercase; letter-spacing: .08em; font-size: 9px; font-weight: 700; }
 .tree-row { min-height: 34px; display: flex; align-items: center; }
@@ -97,7 +97,7 @@ button { color: inherit; }
 .tree-error, .empty-tree { color: var(--danger); font-size: 11px; padding: 7px 10px; }
 .empty-tree { color: var(--muted); line-height: 1.5; }
 
-.main-content { min-width: 0; overflow: auto; }
+.main-content { min-width: 0; min-height: 0; overflow: auto; }
 .content-page { padding: 31px clamp(26px, 4vw, 56px) 50px; max-width: 1440px; margin: 0 auto; }
 .content-page.wide-page { max-width: 1680px; }
 .page-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 27px; }
