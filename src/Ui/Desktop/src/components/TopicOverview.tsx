@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Copy, FolderTree, Layers3, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "../api";
 import type { TopicDetails } from "../types";
+import { useDialogs } from "./Dialogs";
 import { Capability, Metric } from "./QueueOverview";
 
 export function TopicOverview({
@@ -17,9 +18,10 @@ export function TopicOverview({
   onSelectSubscription: (name: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const [tab, setTab] = useState<"overview" | "subscriptions" | "settings">("overview");
-  const topic = useQuery({ queryKey: ["topic", connectionName, topicName], queryFn: () => api.topic(connectionName, topicName) });
-  const subscriptions = useQuery({ queryKey: ["subscriptions", connectionName, topicName], queryFn: () => api.subscriptions(connectionName, topicName) });
+  const topic = useQuery({ queryKey: ["topic", connectionName, topicName], queryFn: () => api.topic(connectionName, topicName), staleTime: 0, refetchOnMount: "always" });
+  const subscriptions = useQuery({ queryKey: ["subscriptions", connectionName, topicName], queryFn: () => api.subscriptions(connectionName, topicName), staleTime: 0, refetchOnMount: "always" });
   const clone = useMutation({
     mutationFn: (name: string) => api.cloneTopic(connectionName, topicName, name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["topics", connectionName] }),
@@ -45,13 +47,32 @@ export function TopicOverview({
   const details = topic.data;
   const error = clone.error ?? remove.error ?? createSubscription.error;
 
-  function promptClone() {
-    const name = window.prompt("Name for the cloned topic", `${topicName}-copy`)?.trim();
+  async function promptClone() {
+    const name = await dialogs.prompt({
+      title: "Clone topic",
+      message: `Create a copy of ${topicName} with the same settings.`,
+      defaultValue: `${topicName}-copy`,
+      confirmLabel: "Clone",
+    });
     if (name) clone.mutate(name);
   }
-  function promptSubscription() {
-    const name = window.prompt("New subscription name")?.trim();
+  async function promptSubscription() {
+    const name = await dialogs.prompt({
+      title: "New subscription",
+      message: `Add a subscription to ${topicName}.`,
+      placeholder: "Subscription name",
+      confirmLabel: "Create",
+    });
     if (name) createSubscription.mutate(name);
+  }
+  async function promptDelete() {
+    const confirmed = await dialogs.confirm({
+      title: `Delete topic ${topicName}?`,
+      message: "The topic, its subscriptions, and all messages are permanently removed.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (confirmed) remove.mutate();
   }
 
   return (
@@ -61,7 +82,7 @@ export function TopicOverview({
         <div className="header-actions">
           <button className="button secondary" onClick={promptClone} disabled={clone.isPending}><Copy size={15} /> Clone</button>
           <button className="button secondary" onClick={() => { topic.refetch(); subscriptions.refetch(); }}><RefreshCw size={15} /> Refresh</button>
-          <button className="button danger-ghost" onClick={() => window.confirm(`Delete topic ${topicName} and all its subscriptions?`) && remove.mutate()}><Trash2 size={15} /> Delete</button>
+          <button className="button danger-ghost" onClick={promptDelete}><Trash2 size={15} /> Delete</button>
         </div>
       </header>
       {error && <div className="notice error">{error.message}</div>}

@@ -13,6 +13,7 @@ import {
 import { api } from "./api";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionOverview } from "./components/ConnectionOverview";
+import { useDialogs } from "./components/Dialogs";
 import { JobsPanel } from "./components/JobsPanel";
 import { QueueOverview } from "./components/QueueOverview";
 import { ResourceExplorer } from "./components/ResourceExplorer";
@@ -28,6 +29,7 @@ const EXPLORER_WIDTH_STORAGE_KEY = "explorer-width";
 
 export function App() {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection>();
   const [jobsOpen, setJobsOpen] = useState(false);
@@ -44,6 +46,14 @@ export function App() {
       : EXPLORER_DEFAULT_WIDTH;
   });
   const connections = useQuery({ queryKey: ["connections"], queryFn: api.connections });
+  const jobs = useQuery({
+    queryKey: ["jobs"],
+    queryFn: api.jobs,
+    refetchInterval: ({ state }) =>
+      state.data?.some((job) => job.status === "Running" || job.status === "Queued") ? 750 : false,
+  });
+  const trackedJobs = useRef<Set<string>>(new Set());
+  const jobTrackingReady = useRef(false);
   const saveConnection = useMutation({
     mutationFn: (connection: SaveConnection) => api.saveConnection(cleanConnection(connection)),
     onSuccess: (saved) => {
@@ -72,10 +82,27 @@ export function App() {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
-
   useEffect(() => {
     localStorage.setItem(EXPLORER_WIDTH_STORAGE_KEY, explorerWidth.toString());
   }, [explorerWidth]);
+
+  // A finished purge, resend, or delete changes message counts everywhere they are shown.
+  useEffect(() => {
+    if (!jobs.data) return;
+    const finished = jobs.data.filter((job) => job.status !== "Queued" && job.status !== "Running");
+    if (!jobTrackingReady.current) {
+      finished.forEach((job) => trackedJobs.current.add(job.id));
+      jobTrackingReady.current = true;
+      return;
+    }
+
+    const fresh = finished.filter((job) => !trackedJobs.current.has(job.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((job) => trackedJobs.current.add(job.id));
+    for (const key of ["queues", "queue", "topics", "topic", "subscriptions", "subscription"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [jobs.data, queryClient]);
 
   useEffect(() => {
     const workspace = workspaceRef.current;
@@ -128,8 +155,13 @@ export function App() {
           connections={connections.data ?? []}
           selection={selection}
           onSelect={setSelection}
-          onCreateEntity={(kind, connectionName) => {
-            const name = window.prompt(`New ${kind} name`)?.trim();
+          onCreateEntity={async (kind, connectionName) => {
+            const name = await dialogs.prompt({
+              title: `New ${kind}`,
+              message: `Create a ${kind} in ${connectionName}.`,
+              placeholder: `${kind} name`,
+              confirmLabel: "Create",
+            });
             if (name) createEntity.mutate({ kind, connectionName, name });
           }}
         />

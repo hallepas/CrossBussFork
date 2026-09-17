@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import type { QueueDetails } from "../types";
+import { useDialogs } from "./Dialogs";
 import { MessagesWorkspace } from "./MessagesWorkspace";
 
 export function QueueOverview({
@@ -27,10 +28,13 @@ export function QueueOverview({
   onJobStarted: () => void;
 }) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const [tab, setTab] = useState<"overview" | "messages" | "settings">("overview");
   const queue = useQuery({
     queryKey: ["queue", connectionName, queueName],
     queryFn: () => api.queue(connectionName, queueName),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const clone = useMutation({
     mutationFn: (name: string) => api.cloneQueue(connectionName, queueName, name),
@@ -51,13 +55,24 @@ export function QueueOverview({
   const info = details.info;
   const mutationError = clone.error ?? remove.error;
 
-  function cloneQueue() {
-    const name = window.prompt("Name for the cloned queue", `${queueName}-copy`)?.trim();
+  async function cloneQueue() {
+    const name = await dialogs.prompt({
+      title: "Clone queue",
+      message: `Create a copy of ${queueName} with the same settings.`,
+      defaultValue: `${queueName}-copy`,
+      confirmLabel: "Clone",
+    });
     if (name) clone.mutate(name);
   }
 
-  function deleteQueue() {
-    if (window.confirm(`Delete queue ${queueName}? This cannot be undone.`)) remove.mutate();
+  async function deleteQueue() {
+    const confirmed = await dialogs.confirm({
+      title: `Delete queue ${queueName}?`,
+      message: "The queue and all of its messages are permanently removed.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (confirmed) remove.mutate();
   }
 
   return (

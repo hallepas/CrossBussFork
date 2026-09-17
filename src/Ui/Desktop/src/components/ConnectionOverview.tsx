@@ -1,20 +1,26 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, KeyRound, Network, Pencil, RadioTower, Trash2, Wifi } from "lucide-react";
 import { api } from "../api";
+import { useDialogs } from "./Dialogs";
 import type { Connection } from "../types";
 
 export function ConnectionOverview({ connection, onEdit, onDeleted }: { connection: Connection; onEdit: () => void; onDeleted: () => void }) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const test = useMutation({ mutationFn: () => api.testConnection(connection.name) });
   const remove = useMutation({
     mutationFn: () => api.deleteConnection(connection.name),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["connections"] }); onDeleted(); },
   });
 
-  function confirmDelete() {
-    if (window.confirm(`Delete the ${connection.name} connection profile?`)) {
-      remove.mutate();
-    }
+  async function confirmDelete() {
+    const confirmed = await dialogs.confirm({
+      title: `Delete ${connection.name}?`,
+      message: "The connection profile and its stored connection string are removed from this machine.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (confirmed) remove.mutate();
   }
 
   return (

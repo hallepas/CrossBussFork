@@ -3,13 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Copy, Filter, Layers3, MessageSquareText, RefreshCw, Save, ShieldAlert, Trash2 } from "lucide-react";
 import { api } from "../api";
 import type { Rule, SubscriptionDetails } from "../types";
+import { useDialogs } from "./Dialogs";
 import { Capability, Metric } from "./QueueOverview";
 import { MessagesWorkspace } from "./MessagesWorkspace";
 
 export function SubscriptionOverview({ connectionName, topicName, subscriptionName, onDeleted, onJobStarted }: { connectionName: string; topicName: string; subscriptionName: string; onDeleted: () => void; onJobStarted: () => void }) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const [tab, setTab] = useState<"overview" | "messages" | "rules" | "settings">("overview");
-  const subscription = useQuery({ queryKey: ["subscription", connectionName, topicName, subscriptionName], queryFn: () => api.subscription(connectionName, topicName, subscriptionName) });
+  const subscription = useQuery({ queryKey: ["subscription", connectionName, topicName, subscriptionName], queryFn: () => api.subscription(connectionName, topicName, subscriptionName), staleTime: 0, refetchOnMount: "always" });
   const clone = useMutation({ mutationFn: (name: string) => api.cloneSubscription(connectionName, topicName, subscriptionName, name), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subscriptions", connectionName, topicName] }) });
   const remove = useMutation({ mutationFn: () => api.deleteSubscription(connectionName, topicName, subscriptionName), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions", connectionName, topicName] }); onDeleted(); } });
 
@@ -18,8 +20,28 @@ export function SubscriptionOverview({ connectionName, topicName, subscriptionNa
   const details = subscription.data;
   const error = clone.error ?? remove.error;
 
+  async function promptClone() {
+    const name = await dialogs.prompt({
+      title: "Clone subscription",
+      message: `Create a copy of ${subscriptionName} with the same settings.`,
+      defaultValue: `${subscriptionName}-copy`,
+      confirmLabel: "Clone",
+    });
+    if (name) clone.mutate(name);
+  }
+
+  async function promptDelete() {
+    const confirmed = await dialogs.confirm({
+      title: `Delete subscription ${subscriptionName}?`,
+      message: "The subscription, its rules, and all messages are permanently removed.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (confirmed) remove.mutate();
+  }
+
   return <div className="content-page wide-page">
-    <header className="page-header"><div><div className="breadcrumbs">{connectionName} / Topics / {topicName} / {subscriptionName}</div><div className="title-line"><div className="resource-icon subscription"><Layers3 size={22} /></div><div><div className="title-with-status"><h1>{subscriptionName}</h1><span className={`status ${details.info.status.toLowerCase()}`}>{details.info.status}</span></div><p>Subscription messages, filters, and delivery behavior</p></div></div></div><div className="header-actions"><button className="button secondary" onClick={() => { const name = window.prompt("Name for the cloned subscription", `${subscriptionName}-copy`)?.trim(); if (name) clone.mutate(name); }}><Copy size={15} /> Clone</button><button className="button secondary" onClick={() => subscription.refetch()}><RefreshCw size={15} /> Refresh</button><button className="button danger-ghost" onClick={() => window.confirm(`Delete subscription ${subscriptionName}?`) && remove.mutate()}><Trash2 size={15} /> Delete</button></div></header>
+    <header className="page-header"><div><div className="breadcrumbs">{connectionName} / Topics / {topicName} / {subscriptionName}</div><div className="title-line"><div className="resource-icon subscription"><Layers3 size={22} /></div><div><div className="title-with-status"><h1>{subscriptionName}</h1><span className={`status ${details.info.status.toLowerCase()}`}>{details.info.status}</span></div><p>Subscription messages, filters, and delivery behavior</p></div></div></div><div className="header-actions"><button className="button secondary" onClick={promptClone}><Copy size={15} /> Clone</button><button className="button secondary" onClick={() => subscription.refetch()}><RefreshCw size={15} /> Refresh</button><button className="button danger-ghost" onClick={promptDelete}><Trash2 size={15} /> Delete</button></div></header>
     {error && <div className="notice error">{error.message}</div>}
     <div className="metric-grid compact-metrics"><Metric label="Active" value={details.info.activeMessagesCount} icon={<MessageSquareText />} tone="accent" /><Metric label="Dead letter" value={details.info.deadLetterMessagesCount} icon={<ShieldAlert />} tone={details.info.deadLetterMessagesCount ? "danger" : "neutral"} /><Metric label="Transfer" value={details.info.transferMessagesCount} icon={<ArrowRightLeft />} tone="neutral" /></div>
     <div className="tab-strip"><Tab active={tab === "overview"} onClick={() => setTab("overview")}>Overview</Tab><Tab active={tab === "messages"} onClick={() => setTab("messages")}>Messages <span>{(details.info.activeMessagesCount + details.info.deadLetterMessagesCount).toLocaleString()}</span></Tab><Tab active={tab === "rules"} onClick={() => setTab("rules")}>Rules</Tab><Tab active={tab === "settings"} onClick={() => setTab("settings")}>Settings</Tab></div>
@@ -36,12 +58,13 @@ function Summary({ details, onEdit }: { details: SubscriptionDetails; onEdit: ()
 
 function Rules({ connectionName, topicName, subscriptionName }: { connectionName: string; topicName: string; subscriptionName: string }) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const [editing, setEditing] = useState<Rule>();
   const [originalName, setOriginalName] = useState<string>();
   const rules = useQuery({ queryKey: ["rules", connectionName, topicName, subscriptionName], queryFn: () => api.rules(connectionName, topicName, subscriptionName) });
   const save = useMutation({ mutationFn: (rule: Rule) => api.saveRule(connectionName, topicName, subscriptionName, rule, originalName), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["rules", connectionName, topicName, subscriptionName] }); setEditing(undefined); setOriginalName(undefined); } });
   const remove = useMutation({ mutationFn: (name: string) => api.deleteRule(connectionName, topicName, subscriptionName, name), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rules", connectionName, topicName, subscriptionName] }) });
-  return <section className="card table-card"><div className="card-heading"><div><span className="eyebrow">Filters</span><h2>Subscription rules</h2></div><button className="button primary" onClick={() => { setOriginalName(undefined); setEditing({ name: "", type: "Sql", value: "" }); }}><Filter size={15} /> Add rule</button></div>{rules.isPending ? <div className="empty-messages">Loading rules…</div> : rules.error ? <div className="notice error">{rules.error.message}</div> : <table className="data-table"><thead><tr><th>Actions</th><th>Name</th><th>Type</th><th>Filter value</th></tr></thead><tbody>{rules.data?.map((rule) => <tr key={rule.name}><td className="row-actions"><button onClick={() => { setOriginalName(rule.name); setEditing(rule); }}>Edit</button><button onClick={() => window.confirm(`Delete rule ${rule.name}?`) && remove.mutate(rule.name)}><Trash2 size={14} /></button></td><td>{rule.name}</td><td>{formatRuleType(rule.type)}</td><td><code>{rule.value || "—"}</code></td></tr>)}</tbody></table>}{(save.error || remove.error) && <div className="notice error">{(save.error ?? remove.error)?.message}</div>}{editing && <RuleDialog rule={editing} originalName={originalName} busy={save.isPending} onClose={() => setEditing(undefined)} onSave={(rule) => save.mutate(rule)} />}</section>;
+  return <section className="card table-card"><div className="card-heading"><div><span className="eyebrow">Filters</span><h2>Subscription rules</h2></div><button className="button primary" onClick={() => { setOriginalName(undefined); setEditing({ name: "", type: "Sql", value: "" }); }}><Filter size={15} /> Add rule</button></div>{rules.isPending ? <div className="empty-messages">Loading rules…</div> : rules.error ? <div className="notice error">{rules.error.message}</div> : <table className="data-table"><thead><tr><th>Actions</th><th>Name</th><th>Type</th><th>Filter value</th></tr></thead><tbody>{rules.data?.map((rule) => <tr key={rule.name}><td className="row-actions"><button onClick={() => { setOriginalName(rule.name); setEditing(rule); }}>Edit</button><button onClick={async () => { if (await dialogs.confirm({ title: `Delete rule ${rule.name}?`, message: "Messages will match the remaining rules only.", confirmLabel: "Delete", danger: true })) remove.mutate(rule.name); }}><Trash2 size={14} /></button></td><td>{rule.name}</td><td>{formatRuleType(rule.type)}</td><td><code>{rule.value || "—"}</code></td></tr>)}</tbody></table>}{(save.error || remove.error) && <div className="notice error">{(save.error ?? remove.error)?.message}</div>}{editing && <RuleDialog rule={editing} originalName={originalName} busy={save.isPending} onClose={() => setEditing(undefined)} onSave={(rule) => save.mutate(rule)} />}</section>;
 }
 
 function RuleDialog({ rule, originalName, busy, onClose, onSave }: { rule: Rule; originalName?: string; busy: boolean; onClose: () => void; onSave: (rule: Rule) => void }) {

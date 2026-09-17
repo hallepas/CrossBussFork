@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleDot,
   Folder,
   Layers3,
@@ -11,9 +13,18 @@ import {
   RefreshCw,
   Search,
   Plus,
+  Timer,
 } from "lucide-react";
 import { api } from "../api";
 import type { Connection, ResourceSelection, TopicStructure } from "../types";
+
+const AUTO_REFRESH_OPTIONS = [
+  { label: "15s", value: 15_000 },
+  { label: "30s", value: 30_000 },
+  { label: "1m", value: 60_000 },
+  { label: "5m", value: 300_000 },
+];
+const DEFAULT_AUTO_REFRESH_MS = 30_000;
 
 interface Props {
   connections: Connection[];
@@ -22,8 +33,34 @@ interface Props {
   onCreateEntity: (kind: "queue" | "topic", connectionName: string) => void;
 }
 
+interface TreeCommand {
+  id: number;
+  action: "collapse" | "expand";
+}
+
+const TreeCommandContext = createContext<TreeCommand>({ id: 0, action: "collapse" });
+
+// respondsToExpand stays false for levels whose expansion triggers a Service Bus request.
+function useTreeExpansion(initial: boolean, respondsToExpand = true) {
+  const command = useContext(TreeCommandContext);
+  const [expanded, setExpanded] = useState(initial);
+
+  useEffect(() => {
+    if (command.id === 0) return;
+    if (command.action === "collapse") setExpanded(false);
+    else if (respondsToExpand) setExpanded(true);
+  }, [command, respondsToExpand]);
+
+  return [expanded, setExpanded] as const;
+}
+
 export function ResourceExplorer({ connections, selection, onSelect, onCreateEntity }: Props) {
   const [filter, setFilter] = useState("");
+  const [command, setCommand] = useState<TreeCommand>({ id: 0, action: "collapse" });
+
+  function broadcast(action: TreeCommand["action"]) {
+    setCommand((value) => ({ id: value.id + 1, action }));
+  }
 
   return (
     <aside className="resource-panel">
@@ -31,6 +68,24 @@ export function ResourceExplorer({ connections, selection, onSelect, onCreateEnt
         <div>
           <span className="eyebrow">Workspace</span>
           <h2>Explorer</h2>
+        </div>
+        <div className="panel-heading-actions">
+          <button
+            className="icon-button"
+            onClick={() => broadcast("expand")}
+            title="Expand all folders and connections"
+            aria-label="Expand all folders and connections"
+          >
+            <ChevronsUpDown size={16} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => broadcast("collapse")}
+            title="Collapse all"
+            aria-label="Collapse all"
+          >
+            <ChevronsDownUp size={16} />
+          </button>
         </div>
       </div>
       <label className="search-box">
@@ -42,28 +97,69 @@ export function ResourceExplorer({ connections, selection, onSelect, onCreateEnt
           placeholder="Filter resources"
         />
       </label>
-      <nav className="resource-tree" aria-label="Service Bus resources">
-        {connections.length === 0 ? (
-          <div className="empty-tree">Add a connection to start exploring.</div>
-        ) : (
-          groupConnections(connections).map(([folder, items]) => (
-            <section className="connection-folder" key={folder || "__default"}>
-              <div className="connection-folder-label"><Folder size={12} /><span>{folder || "Default"}</span></div>
-              {items.map((connection) => (
-                <ConnectionTree
-                  key={connection.name}
-                  connection={connection}
-                  filter={filter}
-                  selection={selection}
-                  onSelect={onSelect}
-                  onCreateEntity={onCreateEntity}
-                />
-              ))}
-            </section>
-          ))
-        )}
-      </nav>
+      <TreeCommandContext.Provider value={command}>
+        <nav className="resource-tree" aria-label="Service Bus resources">
+          {connections.length === 0 ? (
+            <div className="empty-tree">Add a connection to start exploring.</div>
+          ) : (
+            groupConnections(connections).map(([folder, items]) => (
+              <ConnectionFolder
+                key={folder || "__default"}
+                label={folder || "Default"}
+                connections={items}
+                filter={filter}
+                selection={selection}
+                onSelect={onSelect}
+                onCreateEntity={onCreateEntity}
+              />
+            ))
+          )}
+        </nav>
+      </TreeCommandContext.Provider>
     </aside>
+  );
+}
+
+function ConnectionFolder({
+  label,
+  connections,
+  filter,
+  selection,
+  onSelect,
+  onCreateEntity,
+}: {
+  label: string;
+  connections: Connection[];
+  filter: string;
+  selection?: ResourceSelection;
+  onSelect: (selection: ResourceSelection) => void;
+  onCreateEntity: (kind: "queue" | "topic", connectionName: string) => void;
+}) {
+  const [expanded, setExpanded] = useTreeExpansion(true);
+
+  return (
+    <section className="connection-folder">
+      <button
+        className="connection-folder-label"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+      >
+        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        <Folder size={12} />
+        <span>{label}</span>
+      </button>
+      {expanded &&
+        connections.map((connection) => (
+          <ConnectionTree
+            key={connection.name}
+            connection={connection}
+            filter={filter}
+            selection={selection}
+            onSelect={onSelect}
+            onCreateEntity={onCreateEntity}
+          />
+        ))}
+    </section>
   );
 }
 
@@ -80,18 +176,25 @@ function ConnectionTree({
   onSelect: (selection: ResourceSelection) => void;
   onCreateEntity: (kind: "queue" | "topic", connectionName: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const [queuesExpanded, setQueuesExpanded] = useState(false);
-  const [topicsExpanded, setTopicsExpanded] = useState(false);
+  const [expanded, setExpanded] = useTreeExpansion(true);
+  const [queuesExpanded, setQueuesExpanded] = useTreeExpansion(false, false);
+  const [topicsExpanded, setTopicsExpanded] = useTreeExpansion(false, false);
+  const [autoRefreshMs, setAutoRefreshMs] = useState(0);
+  // Polling only runs for branches the user opened, and pauses while the window is hidden.
+  const refetchInterval: number | false = autoRefreshMs > 0 ? autoRefreshMs : false;
   const queues = useQuery({
     queryKey: ["queues", connection.name],
     queryFn: () => api.queues(connection.name),
     enabled: queuesExpanded,
+    refetchInterval,
+    refetchIntervalInBackground: false,
   });
   const topics = useQuery({
     queryKey: ["topics", connection.name],
     queryFn: () => api.topics(connection.name),
     enabled: topicsExpanded,
+    refetchInterval,
+    refetchIntervalInBackground: false,
   });
   const normalizedFilter = filter.trim().toLocaleLowerCase();
 
@@ -112,6 +215,29 @@ function ConnectionTree({
           <RadioTower size={15} />
           <span className="entity-name" title={connection.name}>{connection.name}</span>
         </button>
+        <span className="tree-row-actions">
+          {autoRefreshMs > 0 && (
+            <select
+              className="auto-refresh-interval"
+              value={autoRefreshMs}
+              onChange={(event) => setAutoRefreshMs(Number(event.target.value))}
+              aria-label={`Auto-refresh interval for ${connection.name}`}
+            >
+              {AUTO_REFRESH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          )}
+          <button
+            className={`tree-refresh ${autoRefreshMs > 0 ? "active" : ""}`}
+            onClick={() => setAutoRefreshMs((value) => (value > 0 ? 0 : DEFAULT_AUTO_REFRESH_MS))}
+            title={autoRefreshMs > 0 ? "Turn off auto-refresh" : "Auto-refresh message counts"}
+            aria-pressed={autoRefreshMs > 0}
+            aria-label={`Auto-refresh ${connection.name}`}
+          >
+            <Timer size={13} />
+          </button>
+        </span>
       </div>
 
       {expanded && (
@@ -172,6 +298,7 @@ function ConnectionTree({
                 filter={normalizedFilter}
                 selection={selection}
                 onSelect={onSelect}
+                autoRefreshMs={autoRefreshMs}
               />
             ))}
           </ResourceGroup>
@@ -226,12 +353,14 @@ function TopicNode({
   filter,
   selection,
   onSelect,
+  autoRefreshMs,
 }: {
   topic: TopicStructure;
   connectionName: string;
   filter: string;
   selection?: ResourceSelection;
   onSelect: (selection: ResourceSelection) => void;
+  autoRefreshMs: number;
 }) {
   const visible =
     topic.name.toLocaleLowerCase().includes(filter) ||
@@ -254,6 +383,7 @@ function TopicNode({
               filter={filter}
               selection={selection}
               onSelect={onSelect}
+              autoRefreshMs={autoRefreshMs}
             />
           ))}
         </div>
@@ -270,6 +400,7 @@ function TopicNode({
       filter={filter}
       selection={selection}
       onSelect={onSelect}
+      autoRefreshMs={autoRefreshMs}
     />
   );
 }
@@ -281,6 +412,7 @@ function TopicLeaf({
   filter,
   selection,
   onSelect,
+  autoRefreshMs,
 }: {
   topic: TopicStructure;
   name: string;
@@ -288,12 +420,15 @@ function TopicLeaf({
   filter: string;
   selection?: ResourceSelection;
   onSelect: (selection: ResourceSelection) => void;
+  autoRefreshMs: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useTreeExpansion(false, false);
   const subscriptions = useQuery({
     queryKey: ["subscriptions", connectionName, name],
     queryFn: () => api.subscriptions(connectionName, name),
     enabled: expanded,
+    refetchInterval: autoRefreshMs > 0 ? autoRefreshMs : false,
+    refetchIntervalInBackground: false,
   });
 
   return (

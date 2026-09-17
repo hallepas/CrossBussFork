@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api";
+import { useDialogs } from "./Dialogs";
 import type { SendMessage, ServiceBusMessage, SubQueue } from "../types";
 
 interface Props {
@@ -36,6 +37,7 @@ export function MessagesWorkspace({
   onJobStarted,
 }: Props) {
   const queryClient = useQueryClient();
+  const dialogs = useDialogs();
   const fileInput = useRef<HTMLInputElement>(null);
   const [subQueue, setSubQueue] = useState<SubQueue>("None");
   const [mode, setMode] = useState<"PeekLock" | "ReceiveAndDelete">("PeekLock");
@@ -83,7 +85,7 @@ export function MessagesWorkspace({
   });
 
   const startJob = useMutation({
-    mutationFn: ({ action, message }: { action: "purge" | "resend" | "delete"; message?: ServiceBusMessage }) => {
+    mutationFn: async ({ action, message }: { action: "purge" | "resend" | "delete"; message?: ServiceBusMessage; destination?: string }) => {
       if (action === "delete" && message) {
         return api.deleteMessage(
           connectionName,
@@ -94,7 +96,12 @@ export function MessagesWorkspace({
         );
       }
       if (action === "resend") {
-        const destination = window.prompt("Destination queue or topic", entityName)?.trim();
+        const destination = await dialogs.prompt({
+          title: "Resend messages",
+          message: `Move up to ${availableCount.toLocaleString()} messages to another entity.`,
+          defaultValue: entityName,
+          confirmLabel: "Resend",
+        });
         if (!destination) throw new Error("A destination is required.");
         return api.resendMessages(
           connectionName,
@@ -139,11 +146,15 @@ export function MessagesWorkspace({
     }
   }
 
-  function confirmPurge() {
+  async function confirmPurge() {
     if (availableCount <= 0) return;
-    if (window.confirm(`Permanently purge up to ${availableCount.toLocaleString()} messages from this source?`)) {
-      startJob.mutate({ action: "purge" });
-    }
+    const confirmed = await dialogs.confirm({
+      title: "Purge messages?",
+      message: `Up to ${availableCount.toLocaleString()} messages are permanently removed from this source.`,
+      confirmLabel: "Purge",
+      danger: true,
+    });
+    if (confirmed) startJob.mutate({ action: "purge" });
   }
 
   function requeue(message: ServiceBusMessage) {
@@ -198,7 +209,7 @@ export function MessagesWorkspace({
                       <button title="View" onClick={() => setSelected(message)}><Eye size={14} /></button>
                       <button title="Edit and send a copy" onClick={() => setComposer(messageToSend(message))}><CopyPlus size={14} /></button>
                       <button title="Requeue to this entity" onClick={() => requeue(message)}><Send size={14} /></button>
-                      <button title="Delete" onClick={() => { if (window.confirm(`Delete sequence ${message.systemProperties.sequenceNumber}?`)) startJob.mutate({ action: "delete", message }); }}><Trash2 size={14} /></button>
+                      <button title="Delete" onClick={async () => { if (await dialogs.confirm({ title: `Delete sequence ${message.systemProperties.sequenceNumber}?`, message: "The message is permanently removed from this source.", confirmLabel: "Delete", danger: true })) startJob.mutate({ action: "delete", message }); }}><Trash2 size={14} /></button>
                     </td>
                     <td><button className="table-link" onClick={() => setSelected(message)}>{message.id}</button></td>
                     <td>{message.systemProperties.sequenceNumber}</td>

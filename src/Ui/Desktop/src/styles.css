@@ -63,6 +63,7 @@ button { color: inherit; }
 .resource-resizer:focus-visible { box-shadow: inset 2px 0 var(--accent); }
 .workspace.is-resizing, .workspace.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 .panel-heading { flex: 0 0 auto; padding: 20px 18px 13px; display: flex; align-items: center; justify-content: space-between; }
+.panel-heading-actions { display: flex; align-items: center; gap: 2px; }
 .panel-heading h2, .jobs-panel h2, .card h2 { margin: 2px 0 0; font-size: 18px; letter-spacing: -.02em; }
 .eyebrow { display: block; color: var(--accent); text-transform: uppercase; letter-spacing: .115em; font-size: 10px; font-weight: 700; }
 .search-box { flex: 0 0 auto; margin: 0 14px 12px; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; color: var(--subtle); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
@@ -70,7 +71,8 @@ button { color: inherit; }
 .search-box input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
 .resource-tree { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 0 8px 20px; }
 .connection-folder { margin-bottom: 9px; }
-.connection-folder-label { min-height: 25px; padding: 0 9px; display: flex; align-items: center; gap: 6px; color: var(--subtle); text-transform: uppercase; letter-spacing: .08em; font-size: 9px; font-weight: 700; }
+.connection-folder-label { width: 100%; min-height: 25px; padding: 0 9px; display: flex; align-items: center; gap: 6px; color: var(--subtle); text-transform: uppercase; letter-spacing: .08em; font-size: 9px; font-weight: 700; border: 0; background: transparent; border-radius: 6px; cursor: pointer; text-align: left; }
+.connection-folder-label:hover { color: var(--text); background: var(--accent-soft); }
 .tree-row { min-height: 34px; display: flex; align-items: center; }
 .tree-expander, .tree-refresh { border: 0; background: transparent; color: var(--subtle); cursor: pointer; display: grid; place-items: center; }
 .tree-expander { width: 24px; height: 28px; }
@@ -82,6 +84,9 @@ button { color: inherit; }
 .group-row { justify-content: space-between; }
 .group-row .tree-label { font-weight: 600; }
 .tree-group-actions { display: flex; }
+.tree-row-actions { margin-left: auto; display: flex; align-items: center; gap: 3px; padding-right: 4px; }
+.tree-refresh.active { color: var(--accent); }
+.auto-refresh-interval { height: 20px; padding: 0 2px; color: var(--subtle); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; font-size: 10px; }
 .tree-refresh { width: 26px; height: 26px; border-radius: 6px; }
 .tree-refresh:hover { color: var(--accent); background: var(--surface); }
 .entity-list { margin-left: 9px; }
@@ -121,6 +126,8 @@ button { color: inherit; }
 .button.secondary:hover { border-color: var(--border-strong); background: var(--surface-raised); }
 .button.tertiary { min-height: 30px; padding: 0 9px; background: transparent; color: var(--accent); }
 .button.danger-ghost { color: var(--danger); background: transparent; }
+.button.danger { color: #fff; border-color: var(--danger); background: var(--danger); }
+.button.danger:hover { filter: brightness(1.08); }
 .icon-button { width: 34px; height: 34px; color: var(--muted); }
 .icon-button:hover { color: var(--text); background: var(--surface-soft); }
 .icon-button.bordered { border: 1px solid var(--border); background: var(--surface); }
