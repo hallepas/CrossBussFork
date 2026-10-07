@@ -98,7 +98,6 @@ button { color: inherit; }
 .topic-row > .entity-row { flex: 1; width: auto; }
 .subscription-list { margin-left: 23px; border-left: 1px solid var(--border); padding-left: 5px; }
 .tree-loading { color: var(--muted); font-size: 10px; padding: 7px; }
-.folder-label { cursor: default; font-weight: 600; }
 .tree-error, .empty-tree { color: var(--danger); font-size: 11px; padding: 7px 10px; }
 .empty-tree { color: var(--muted); line-height: 1.5; }
 

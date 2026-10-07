@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api";
+import { formatCount } from "../format";
 import { useDialogs } from "./Dialogs";
 import type { SendMessage, ServiceBusMessage, SubQueue } from "../types";
 
@@ -98,7 +99,7 @@ export function MessagesWorkspace({
       if (action === "resend") {
         const destination = await dialogs.prompt({
           title: "Resend messages",
-          message: `Move up to ${availableCount.toLocaleString()} messages to another entity.`,
+          message: `Move up to ${formatCount(availableCount)} messages to another entity.`,
           defaultValue: entityName,
           confirmLabel: "Resend",
         });
@@ -150,7 +151,7 @@ export function MessagesWorkspace({
     if (availableCount <= 0) return;
     const confirmed = await dialogs.confirm({
       title: "Purge messages?",
-      message: `Up to ${availableCount.toLocaleString()} messages are permanently removed from this source.`,
+      message: `Up to ${formatCount(availableCount)} messages are permanently removed from this source.`,
       confirmLabel: "Purge",
       danger: true,
     });
@@ -239,7 +240,7 @@ export function MessagesWorkspace({
 }
 
 function SourceButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return <button className={active ? "active" : ""} onClick={onClick}>{label}<span>{count.toLocaleString()}</span></button>;
+  return <button className={active ? "active" : ""} onClick={onClick}>{label}<span>{formatCount(count)}</span></button>;
 }
 
 function MessageDetails({ message, onClose, onEdit, onRequeue }: { message: ServiceBusMessage; onClose: () => void; onEdit: () => void; onRequeue: () => void }) {

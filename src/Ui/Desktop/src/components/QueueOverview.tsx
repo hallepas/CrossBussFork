@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRightLeft,
@@ -12,7 +12,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
-import type { QueueDetails } from "../types";
+import { formatCount } from "../format";
+import type { QueueDetails, QueueInfo } from "../types";
+import { syncQueryData, useRefetchInterval } from "./AutoRefresh";
 import { useDialogs } from "./Dialogs";
 import { MessagesWorkspace } from "./MessagesWorkspace";
 
@@ -35,6 +37,8 @@ export function QueueOverview({
     queryFn: () => api.queue(connectionName, queueName),
     staleTime: 0,
     refetchOnMount: "always",
+    refetchInterval: useRefetchInterval(connectionName),
+    refetchIntervalInBackground: false,
   });
   const clone = useMutation({
     mutationFn: (name: string) => api.cloneQueue(connectionName, queueName, name),
@@ -47,6 +51,13 @@ export function QueueOverview({
       onDeleted();
     },
   });
+
+  useEffect(() => {
+    const info = queue.data?.info;
+    if (!info) return;
+    syncQueryData<QueueInfo[]>(queryClient, ["queues", connectionName], queue.dataUpdatedAt, (list) =>
+      list.map((item) => item.name === info.name ? info : item));
+  }, [queryClient, connectionName, queue.data, queue.dataUpdatedAt]);
 
   if (queue.isPending) return <PageState title="Loading queue" detail="Reading settings and runtime metrics…" />;
   if (queue.error) return <PageState title="Unable to load queue" detail={queue.error.message} error />;
@@ -104,7 +115,7 @@ export function QueueOverview({
 
       <div className="tab-strip" role="tablist">
         <Tab active={tab === "overview"} onClick={() => setTab("overview")}>Overview</Tab>
-        <Tab active={tab === "messages"} onClick={() => setTab("messages")}>Messages <span>{info.totalMessagesCount}</span></Tab>
+        <Tab active={tab === "messages"} onClick={() => setTab("messages")}>Messages <span>{formatCount(info.totalMessagesCount)}</span></Tab>
         <Tab active={tab === "settings"} onClick={() => setTab("settings")}>Settings</Tab>
       </div>
 
@@ -131,8 +142,8 @@ function QueueSummary({ details, onEdit }: { details: QueueDetails; onEdit: () =
         <div className="card-heading"><div><span className="eyebrow">Configuration</span><h2>Delivery and capacity</h2></div><button className="button tertiary" onClick={onEdit}>Edit settings</button></div>
         <dl className="definition-list compact">
           <div><dt>Max delivery count</dt><dd>{details.properties.maxDeliveryCount}</dd></div>
-          <div><dt>Queue size</dt><dd>{details.properties.maxQueueSizeInMegabytes.toLocaleString()} MB</dd></div>
-          <div><dt>Max message size</dt><dd>{details.properties.maxMessageSizeInKilobytes?.toLocaleString() ?? "Default"} KB</dd></div>
+          <div><dt>Queue size</dt><dd>{formatCount(details.properties.maxQueueSizeInMegabytes)} MB</dd></div>
+          <div><dt>Max message size</dt><dd>{details.properties.maxMessageSizeInKilobytes != null ? formatCount(details.properties.maxMessageSizeInKilobytes) : "Default"} KB</dd></div>
           <div><dt>Lock duration</dt><dd>{details.timeSettings.lockDuration}</dd></div>
           <div><dt>Message time to live</dt><dd>{details.timeSettings.defaultMessageTimeToLive}</dd></div>
           <div><dt>Auto-delete on idle</dt><dd>{details.timeSettings.autoDeleteOnIdle}</dd></div>
@@ -209,7 +220,7 @@ function QueueSettings({ connectionName, queueName, details }: { connectionName:
 }
 
 export function Metric({ label, value, icon, tone }: { label: string; value: number; icon: React.ReactNode; tone: string }) {
-  return <div className={`metric-card ${tone}`}><div className="metric-icon">{icon}</div><div><strong>{value.toLocaleString()}</strong><span>{label}</span></div></div>;
+  return <div className={`metric-card ${tone}`}><div className="metric-icon">{icon}</div><div><strong>{formatCount(value)}</strong><span>{label}</span></div></div>;
 }
 
 export function Capability({ label, enabled }: { label: string; enabled: boolean }) {

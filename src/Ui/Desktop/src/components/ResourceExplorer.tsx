@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -16,7 +16,9 @@ import {
   Timer,
 } from "lucide-react";
 import { api } from "../api";
-import type { Connection, ResourceSelection, TopicStructure } from "../types";
+import { formatCount } from "../format";
+import type { Connection, QueueDetails, ResourceSelection, SubscriptionDetails, TopicStructure } from "../types";
+import { syncQueryData, useAutoRefresh } from "./AutoRefresh";
 
 const AUTO_REFRESH_OPTIONS = [
   { label: "15s", value: 15_000 },
@@ -179,7 +181,7 @@ function ConnectionTree({
   const [expanded, setExpanded] = useTreeExpansion(true);
   const [queuesExpanded, setQueuesExpanded] = useTreeExpansion(false, false);
   const [topicsExpanded, setTopicsExpanded] = useTreeExpansion(false, false);
-  const [autoRefreshMs, setAutoRefreshMs] = useState(0);
+  const [autoRefreshMs, setAutoRefreshMs] = useAutoRefresh(connection.name);
   // Polling only runs for branches the user opened, and pauses while the window is hidden.
   const refetchInterval: number | false = autoRefreshMs > 0 ? autoRefreshMs : false;
   const queues = useQuery({
@@ -196,6 +198,12 @@ function ConnectionTree({
     refetchInterval,
     refetchIntervalInBackground: false,
   });
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    for (const queue of queues.data ?? []) {
+      syncQueryData<QueueDetails>(queryClient, ["queue", connection.name, queue.name], queues.dataUpdatedAt, (details) => ({ ...details, info: queue }));
+    }
+  }, [queryClient, connection.name, queues.data, queues.dataUpdatedAt]);
   const normalizedFilter = filter.trim().toLocaleLowerCase();
 
   return (
@@ -230,7 +238,7 @@ function ConnectionTree({
           )}
           <button
             className={`tree-refresh ${autoRefreshMs > 0 ? "active" : ""}`}
-            onClick={() => setAutoRefreshMs((value) => (value > 0 ? 0 : DEFAULT_AUTO_REFRESH_MS))}
+            onClick={() => setAutoRefreshMs(autoRefreshMs > 0 ? 0 : DEFAULT_AUTO_REFRESH_MS)}
             title={autoRefreshMs > 0 ? "Turn off auto-refresh" : "Auto-refresh message counts"}
             aria-pressed={autoRefreshMs > 0}
             aria-label={`Auto-refresh ${connection.name}`}
@@ -269,11 +277,11 @@ function ConnectionTree({
                   <CircleDot size={13} />
                   <span className="entity-name" title={queue.name}>{queue.name}</span>
                   <span className="count-badge" title="Active messages">
-                    {queue.activeMessagesCount}
+                    {formatCount(queue.activeMessagesCount)}
                   </span>
                   {queue.deadLetterMessagesCount > 0 && (
                     <span className="count-badge danger" title="Dead-letter messages">
-                      {queue.deadLetterMessagesCount}
+                      {formatCount(queue.deadLetterMessagesCount)}
                     </span>
                   )}
                 </button>
@@ -290,17 +298,14 @@ function ConnectionTree({
             onCreate={() => onCreateEntity("topic", connection.name)}
           >
             {topics.error && <TreeError message={(topics.error as Error).message} />}
-            {topics.data?.map((topic) => (
-              <TopicNode
-                key={topic.fullName ?? topic.name}
-                topic={topic}
-                connectionName={connection.name}
-                filter={normalizedFilter}
-                selection={selection}
-                onSelect={onSelect}
-                autoRefreshMs={autoRefreshMs}
-              />
-            ))}
+            <TopicTreeItems
+              folder={buildTopicTree(flattenTopics(topics.data ?? []).filter((name) => name.toLocaleLowerCase().includes(normalizedFilter)))}
+              connectionName={connection.name}
+              filter={normalizedFilter}
+              selection={selection}
+              onSelect={onSelect}
+              autoRefreshMs={autoRefreshMs}
+            />
           </ResourceGroup>
         </div>
       )}
@@ -347,66 +352,92 @@ function ResourceGroup({
   );
 }
 
-function TopicNode({
-  topic,
-  connectionName,
-  filter,
-  selection,
-  onSelect,
-  autoRefreshMs,
-}: {
-  topic: TopicStructure;
+function flattenTopics(topics: TopicStructure[]): string[] {
+  return topics
+    .flatMap((topic) => (topic.isFolder ? flattenTopics(topic.childTopics) : [topic.fullName ?? topic.name]))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+interface TopicFolderNode {
+  label: string;
+  folders: TopicFolderNode[];
+  topics: string[];
+}
+
+function buildTopicTree(names: string[]): TopicFolderNode {
+  const root: TopicFolderNode = { label: "", folders: [], topics: [] };
+  for (const name of names) {
+    let node = root;
+    for (const segment of name.split("/").slice(0, -1)) {
+      let child = node.folders.find((folder) => folder.label === segment);
+      if (!child) {
+        child = { label: segment, folders: [], topics: [] };
+        node.folders.push(child);
+      }
+      node = child;
+    }
+    node.topics.push(name);
+  }
+  return compactFolder(root);
+}
+
+// Merges single-child folder chains like VS Code's compact folders.
+function compactFolder(folder: TopicFolderNode): TopicFolderNode {
+  let current = folder;
+  while (current.label && current.topics.length === 0 && current.folders.length === 1) {
+    const child = current.folders[0];
+    current = { label: `${current.label}/${child.label}`, folders: child.folders, topics: child.topics };
+  }
+  return {
+    ...current,
+    folders: current.folders.map(compactFolder).sort((left, right) => left.label.localeCompare(right.label)),
+  };
+}
+
+function countTopics(folder: TopicFolderNode): number {
+  return folder.topics.length + folder.folders.reduce((sum, child) => sum + countTopics(child), 0);
+}
+
+interface TopicItemProps {
   connectionName: string;
   filter: string;
   selection?: ResourceSelection;
   onSelect: (selection: ResourceSelection) => void;
   autoRefreshMs: number;
-}) {
-  const visible =
-    topic.name.toLocaleLowerCase().includes(filter) ||
-    topic.childTopics.some((child) => child.name.toLocaleLowerCase().includes(filter));
-  if (filter && !visible) return null;
+}
 
-  if (topic.isFolder) {
-    return (
-      <div className="topic-folder">
-        <div className="entity-row folder-label">
-          <Folder size={13} />
-          <span className="entity-name" title={topic.name}>{topic.name}</span>
-        </div>
-        <div className="nested-topics">
-          {topic.childTopics.map((child) => (
-            <TopicNode
-              key={child.fullName ?? child.name}
-              topic={child}
-              connectionName={connectionName}
-              filter={filter}
-              selection={selection}
-              onSelect={onSelect}
-              autoRefreshMs={autoRefreshMs}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const name = topic.fullName ?? topic.name;
+function TopicTreeItems({ folder, ...props }: TopicItemProps & { folder: TopicFolderNode }) {
   return (
-    <TopicLeaf
-      topic={topic}
-      name={name}
-      connectionName={connectionName}
-      filter={filter}
-      selection={selection}
-      onSelect={onSelect}
-      autoRefreshMs={autoRefreshMs}
-    />
+    <>
+      {folder.folders.map((child) => <TopicFolder key={child.label} folder={child} {...props} />)}
+      {folder.topics.map((name) => <TopicLeaf key={name} name={name} {...props} />)}
+    </>
+  );
+}
+
+function TopicFolder({ folder, ...props }: TopicItemProps & { folder: TopicFolderNode }) {
+  const [expanded, setExpanded] = useTreeExpansion(false);
+  const open = expanded || props.filter.length > 0;
+  const toggle = () => setExpanded((value) => !value);
+
+  return (
+    <div>
+      <div className="tree-row topic-row">
+        <button className="tree-expander" onClick={toggle} aria-label={open ? "Collapse folder" : "Expand folder"}>
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        <button className="entity-row" onClick={toggle} aria-expanded={open}>
+          <Folder size={13} />
+          <span className="entity-name" title={folder.label}>{folder.label}</span>
+          <span className="count-badge" title="Topics">{formatCount(countTopics(folder))}</span>
+        </button>
+      </div>
+      {open && <div className="nested-topics"><TopicTreeItems folder={folder} {...props} /></div>}
+    </div>
   );
 }
 
 function TopicLeaf({
-  topic,
   name,
   connectionName,
   filter,
@@ -414,7 +445,6 @@ function TopicLeaf({
   onSelect,
   autoRefreshMs,
 }: {
-  topic: TopicStructure;
   name: string;
   connectionName: string;
   filter: string;
@@ -423,6 +453,7 @@ function TopicLeaf({
   autoRefreshMs: number;
 }) {
   const [expanded, setExpanded] = useTreeExpansion(false, false);
+  const label = name.slice(name.lastIndexOf("/") + 1);
   const subscriptions = useQuery({
     queryKey: ["subscriptions", connectionName, name],
     queryFn: () => api.subscriptions(connectionName, name),
@@ -430,6 +461,12 @@ function TopicLeaf({
     refetchInterval: autoRefreshMs > 0 ? autoRefreshMs : false,
     refetchIntervalInBackground: false,
   });
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    for (const item of subscriptions.data ?? []) {
+      syncQueryData<SubscriptionDetails>(queryClient, ["subscription", connectionName, name, item.subscriptionName], subscriptions.dataUpdatedAt, (details) => ({ ...details, info: item }));
+    }
+  }, [queryClient, connectionName, name, subscriptions.data, subscriptions.dataUpdatedAt]);
 
   return (
     <div>
@@ -446,7 +483,7 @@ function TopicLeaf({
           onClick={() => onSelect({ kind: "topic", connectionName, name })}
         >
           <CircleDot size={13} />
-          <span className="entity-name" title={topic.name}>{topic.name}</span>
+          <span className="entity-name" title={name}>{label}</span>
         </button>
       </div>
       {expanded && (
@@ -468,9 +505,9 @@ function TopicLeaf({
               >
                 <Layers3 size={12} />
                 <span className="entity-name" title={item.subscriptionName}>{item.subscriptionName}</span>
-                <span className="count-badge">{item.activeMessagesCount}</span>
+                <span className="count-badge">{formatCount(item.activeMessagesCount)}</span>
                 {item.deadLetterMessagesCount > 0 && (
-                  <span className="count-badge danger">{item.deadLetterMessagesCount}</span>
+                  <span className="count-badge danger">{formatCount(item.deadLetterMessagesCount)}</span>
                 )}
               </button>
             ))}

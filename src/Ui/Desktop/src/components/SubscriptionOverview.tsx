@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Copy, Filter, Layers3, MessageSquareText, RefreshCw, Save, ShieldAlert, Trash2 } from "lucide-react";
 import { api } from "../api";
-import type { Rule, SubscriptionDetails } from "../types";
+import { formatCount } from "../format";
+import type { Rule, SubscriptionDetails, SubscriptionInfo } from "../types";
+import { syncQueryData, useRefetchInterval } from "./AutoRefresh";
 import { useDialogs } from "./Dialogs";
 import { Capability, Metric } from "./QueueOverview";
 import { MessagesWorkspace } from "./MessagesWorkspace";
@@ -11,9 +13,17 @@ export function SubscriptionOverview({ connectionName, topicName, subscriptionNa
   const queryClient = useQueryClient();
   const dialogs = useDialogs();
   const [tab, setTab] = useState<"overview" | "messages" | "rules" | "settings">("overview");
-  const subscription = useQuery({ queryKey: ["subscription", connectionName, topicName, subscriptionName], queryFn: () => api.subscription(connectionName, topicName, subscriptionName), staleTime: 0, refetchOnMount: "always" });
+  const refetchInterval = useRefetchInterval(connectionName);
+  const subscription = useQuery({ queryKey: ["subscription", connectionName, topicName, subscriptionName], queryFn: () => api.subscription(connectionName, topicName, subscriptionName), staleTime: 0, refetchOnMount: "always", refetchInterval, refetchIntervalInBackground: false });
   const clone = useMutation({ mutationFn: (name: string) => api.cloneSubscription(connectionName, topicName, subscriptionName, name), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subscriptions", connectionName, topicName] }) });
   const remove = useMutation({ mutationFn: () => api.deleteSubscription(connectionName, topicName, subscriptionName), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["subscriptions", connectionName, topicName] }); onDeleted(); } });
+
+  useEffect(() => {
+    const info = subscription.data?.info;
+    if (!info) return;
+    syncQueryData<SubscriptionInfo[]>(queryClient, ["subscriptions", connectionName, topicName], subscription.dataUpdatedAt, (list) =>
+      list.map((item) => item.subscriptionName === info.subscriptionName ? info : item));
+  }, [queryClient, connectionName, topicName, subscription.data, subscription.dataUpdatedAt]);
 
   if (subscription.isPending) return <State title="Loading subscription" detail="Reading settings and runtime metrics…" />;
   if (subscription.error) return <State title="Unable to load subscription" detail={subscription.error.message} error />;
@@ -44,7 +54,7 @@ export function SubscriptionOverview({ connectionName, topicName, subscriptionNa
     <header className="page-header"><div><div className="breadcrumbs">{connectionName} / Topics / {topicName} / {subscriptionName}</div><div className="title-line"><div className="resource-icon subscription"><Layers3 size={22} /></div><div><div className="title-with-status"><h1>{subscriptionName}</h1><span className={`status ${details.info.status.toLowerCase()}`}>{details.info.status}</span></div><p>Subscription messages, filters, and delivery behavior</p></div></div></div><div className="header-actions"><button className="button secondary" onClick={promptClone}><Copy size={15} /> Clone</button><button className="button secondary" onClick={() => subscription.refetch()}><RefreshCw size={15} /> Refresh</button><button className="button danger-ghost" onClick={promptDelete}><Trash2 size={15} /> Delete</button></div></header>
     {error && <div className="notice error">{error.message}</div>}
     <div className="metric-grid compact-metrics"><Metric label="Active" value={details.info.activeMessagesCount} icon={<MessageSquareText />} tone="accent" /><Metric label="Dead letter" value={details.info.deadLetterMessagesCount} icon={<ShieldAlert />} tone={details.info.deadLetterMessagesCount ? "danger" : "neutral"} /><Metric label="Transfer" value={details.info.transferMessagesCount} icon={<ArrowRightLeft />} tone="neutral" /></div>
-    <div className="tab-strip"><Tab active={tab === "overview"} onClick={() => setTab("overview")}>Overview</Tab><Tab active={tab === "messages"} onClick={() => setTab("messages")}>Messages <span>{(details.info.activeMessagesCount + details.info.deadLetterMessagesCount).toLocaleString()}</span></Tab><Tab active={tab === "rules"} onClick={() => setTab("rules")}>Rules</Tab><Tab active={tab === "settings"} onClick={() => setTab("settings")}>Settings</Tab></div>
+    <div className="tab-strip"><Tab active={tab === "overview"} onClick={() => setTab("overview")}>Overview</Tab><Tab active={tab === "messages"} onClick={() => setTab("messages")}>Messages <span>{formatCount(details.info.activeMessagesCount + details.info.deadLetterMessagesCount)}</span></Tab><Tab active={tab === "rules"} onClick={() => setTab("rules")}>Rules</Tab><Tab active={tab === "settings"} onClick={() => setTab("settings")}>Settings</Tab></div>
     {tab === "overview" && <Summary details={details} onEdit={() => setTab("settings")} />}
     {tab === "messages" && <MessagesWorkspace connectionName={connectionName} entityName={topicName} subscriptionName={subscriptionName} activeCount={details.info.activeMessagesCount} deadLetterCount={details.info.deadLetterMessagesCount} onJobStarted={onJobStarted} />}
     {tab === "rules" && <Rules connectionName={connectionName} topicName={topicName} subscriptionName={subscriptionName} />}

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Copy, FolderTree, Layers3, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "../api";
+import { formatCount } from "../format";
 import type { TopicDetails } from "../types";
+import { useRefetchInterval } from "./AutoRefresh";
 import { useDialogs } from "./Dialogs";
 import { Capability, Metric } from "./QueueOverview";
 
@@ -20,8 +22,9 @@ export function TopicOverview({
   const queryClient = useQueryClient();
   const dialogs = useDialogs();
   const [tab, setTab] = useState<"overview" | "subscriptions" | "settings">("overview");
-  const topic = useQuery({ queryKey: ["topic", connectionName, topicName], queryFn: () => api.topic(connectionName, topicName), staleTime: 0, refetchOnMount: "always" });
-  const subscriptions = useQuery({ queryKey: ["subscriptions", connectionName, topicName], queryFn: () => api.subscriptions(connectionName, topicName), staleTime: 0, refetchOnMount: "always" });
+  const refetchInterval = useRefetchInterval(connectionName);
+  const topic = useQuery({ queryKey: ["topic", connectionName, topicName], queryFn: () => api.topic(connectionName, topicName), staleTime: 0, refetchOnMount: "always", refetchInterval, refetchIntervalInBackground: false });
+  const subscriptions = useQuery({ queryKey: ["subscriptions", connectionName, topicName], queryFn: () => api.subscriptions(connectionName, topicName), staleTime: 0, refetchOnMount: "always", refetchInterval, refetchIntervalInBackground: false });
   const clone = useMutation({
     mutationFn: (name: string) => api.cloneTopic(connectionName, topicName, name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["topics", connectionName] }),
@@ -105,7 +108,7 @@ export function TopicOverview({
           <div className="card-heading"><div><span className="eyebrow">Subscriptions</span><h2>Consumers</h2></div><button className="button primary" onClick={promptSubscription}>Add subscription</button></div>
           {subscriptions.error ? <div className="notice error">{subscriptions.error.message}</div> : (
             <table className="data-table"><thead><tr><th>Name</th><th>Status</th><th>Active</th><th>Dead letter</th><th>Last accessed</th></tr></thead><tbody>
-              {subscriptions.data?.map((item) => <tr key={item.subscriptionName} onDoubleClick={() => onSelectSubscription(item.subscriptionName)}><td><button className="table-link" onClick={() => onSelectSubscription(item.subscriptionName)}>{item.subscriptionName}</button></td><td><span className={`status ${item.status.toLowerCase()}`}>{item.status}</span></td><td>{item.activeMessagesCount.toLocaleString()}</td><td>{item.deadLetterMessagesCount.toLocaleString()}</td><td>{new Date(item.accessedAt).toLocaleString()}</td></tr>)}
+              {subscriptions.data?.map((item) => <tr key={item.subscriptionName} onDoubleClick={() => onSelectSubscription(item.subscriptionName)}><td><button className="table-link" onClick={() => onSelectSubscription(item.subscriptionName)}>{item.subscriptionName}</button></td><td><span className={`status ${item.status.toLowerCase()}`}>{item.status}</span></td><td>{formatCount(item.activeMessagesCount)}</td><td>{formatCount(item.deadLetterMessagesCount)}</td><td>{new Date(item.accessedAt).toLocaleString()}</td></tr>)}
             </tbody></table>
           )}
         </section>
@@ -116,7 +119,7 @@ export function TopicOverview({
 }
 
 function TopicSummary({ details, onEdit }: { details: TopicDetails; onEdit: () => void }) {
-  return <div className="overview-grid"><section className="card"><div className="card-heading"><div><span className="eyebrow">Configuration</span><h2>Capacity and retention</h2></div><button className="button tertiary" onClick={onEdit}>Edit settings</button></div><dl className="definition-list compact"><div><dt>Maximum size</dt><dd>{details.properties.maxQueueSizeInMegabytes.toLocaleString()} MB</dd></div><div><dt>Maximum message</dt><dd>{details.properties.maxMessageSizeInKilobytes?.toLocaleString() ?? "Default"} KB</dd></div><div><dt>Default message TTL</dt><dd>{details.timeSettings.defaultMessageTimeToLive}</dd></div><div><dt>Auto-delete on idle</dt><dd>{details.timeSettings.autoDeleteOnIdle}</dd></div><div><dt>Duplicate detection window</dt><dd>{details.timeSettings.duplicateDetectionHistoryTimeWindow}</dd></div></dl></section><section className="card"><div className="card-heading"><div><span className="eyebrow">Behavior</span><h2>Capabilities</h2></div></div><div className="capability-list"><Capability label="Batched operations" enabled={details.settings.enableBatchedOperations} /><Capability label="Partitioning" enabled={details.settings.enablePartitioning} /><Capability label="Duplicate detection" enabled={details.settings.requiresDuplicateDetection} /><Capability label="Ordering" enabled={details.settings.supportOrdering} /></div></section></div>;
+  return <div className="overview-grid"><section className="card"><div className="card-heading"><div><span className="eyebrow">Configuration</span><h2>Capacity and retention</h2></div><button className="button tertiary" onClick={onEdit}>Edit settings</button></div><dl className="definition-list compact"><div><dt>Maximum size</dt><dd>{formatCount(details.properties.maxQueueSizeInMegabytes)} MB</dd></div><div><dt>Maximum message</dt><dd>{details.properties.maxMessageSizeInKilobytes != null ? formatCount(details.properties.maxMessageSizeInKilobytes) : "Default"} KB</dd></div><div><dt>Default message TTL</dt><dd>{details.timeSettings.defaultMessageTimeToLive}</dd></div><div><dt>Auto-delete on idle</dt><dd>{details.timeSettings.autoDeleteOnIdle}</dd></div><div><dt>Duplicate detection window</dt><dd>{details.timeSettings.duplicateDetectionHistoryTimeWindow}</dd></div></dl></section><section className="card"><div className="card-heading"><div><span className="eyebrow">Behavior</span><h2>Capabilities</h2></div></div><div className="capability-list"><Capability label="Batched operations" enabled={details.settings.enableBatchedOperations} /><Capability label="Partitioning" enabled={details.settings.enablePartitioning} /><Capability label="Duplicate detection" enabled={details.settings.requiresDuplicateDetection} /><Capability label="Ordering" enabled={details.settings.supportOrdering} /></div></section></div>;
 }
 
 function TopicSettings({ connectionName, topicName, details }: { connectionName: string; topicName: string; details: TopicDetails }) {
