@@ -15,6 +15,7 @@ import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ConnectionOverview } from "./components/ConnectionOverview";
 import { useDialogs } from "./components/Dialogs";
 import { JobsPanel } from "./components/JobsPanel";
+import { LiveTracker } from "./components/LiveTracker";
 import { QueueOverview } from "./components/QueueOverview";
 import { ResourceExplorer } from "./components/ResourceExplorer";
 import { SubscriptionOverview } from "./components/SubscriptionOverview";
@@ -226,7 +227,9 @@ export function App() {
               action={<button className="button primary" onClick={() => { setEditingConnection(undefined); setConnectionDialogOpen(true); }}><Plus size={17} /> Add connection</button>}
             />
           ) : selection.kind === "connection" ? (
-            <ConnectionOverview connection={selectedConnection} onEdit={() => { setEditingConnection(selectedConnection); setConnectionDialogOpen(true); }} onDeleted={() => setSelection(undefined)} />
+            <ConnectionOverview connection={selectedConnection} onEdit={() => { setEditingConnection(selectedConnection); setConnectionDialogOpen(true); }} onDeleted={() => setSelection(undefined)} onOpenTracker={() => setSelection({ kind: "tracker", connectionName: selectedConnection.name })} />
+          ) : selection.kind === "tracker" ? (
+            <LiveTracker key={selection.connectionName} connection={selectedConnection} onNavigate={setSelection} />
           ) : selection.kind === "queue" ? (
             <QueueOverview
               connectionName={selection.connectionName}

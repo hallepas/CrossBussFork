@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, KeyRound, Network, Pencil, RadioTower, Trash2, Wifi } from "lucide-react";
+import { CheckCircle2, KeyRound, Network, Pencil, Radar, RadioTower, Trash2, Wifi } from "lucide-react";
 import { api } from "../api";
 import { useDialogs } from "./Dialogs";
 import type { Connection } from "../types";
 
-export function ConnectionOverview({ connection, onEdit, onDeleted }: { connection: Connection; onEdit: () => void; onDeleted: () => void }) {
+export function ConnectionOverview({ connection, onEdit, onDeleted, onOpenTracker }: { connection: Connection; onEdit: () => void; onDeleted: () => void; onOpenTracker: () => void }) {
   const queryClient = useQueryClient();
   const dialogs = useDialogs();
   const test = useMutation({ mutationFn: () => api.testConnection(connection.name) });
@@ -37,6 +37,7 @@ export function ConnectionOverview({ connection, onEdit, onDeleted }: { connecti
           </div>
         </div>
         <div className="header-actions">
+          <button className="button secondary" onClick={onOpenTracker}><Radar size={16} /> Live tracker</button>
           <button className="button secondary" onClick={onEdit}><Pencil size={16} /> Edit</button>
           <button className="button secondary" onClick={() => test.mutate()} disabled={test.isPending}>
             <Wifi size={16} /> {test.isPending ? "Testing…" : "Test connection"}

@@ -17,6 +17,10 @@ private loopback sidecar and proxies only the application's `/api/v1` routes.
 - Peek or receive messages by count, sequence number, or until the source is empty
 - Inspect, edit/copy, send, requeue, import, and delete messages
 - Purge and dead-letter resend operations with cancellable background progress
+- Live tracker per connection that shows which queues, topics, and subscriptions
+  receive messages, peeks new messages, and can add temporary topic tap
+  subscriptions (`cbe-tap-*`, auto-deleted when idle) to capture message
+  content even after consumers processed it
 - Dark and light themes with responsive native-window layouts
 
 Connection metadata and connection-string secrets are stored separately in the

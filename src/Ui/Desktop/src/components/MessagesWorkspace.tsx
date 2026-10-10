@@ -243,12 +243,18 @@ function SourceButton({ label, count, active, onClick }: { label: string; count:
   return <button className={active ? "active" : ""} onClick={onClick}>{label}<span>{formatCount(count)}</span></button>;
 }
 
-function MessageDetails({ message, onClose, onEdit, onRequeue }: { message: ServiceBusMessage; onClose: () => void; onEdit: () => void; onRequeue: () => void }) {
+export function MessageDetails({ message, onClose, onEdit, onRequeue, actions }: { message: ServiceBusMessage; onClose: () => void; onEdit?: () => void; onRequeue?: () => void; actions?: React.ReactNode }) {
   const body = useMemo(() => prettyBody(message.body), [message.body]);
   return (
     <aside className="message-details-panel">
       <header><div><span className="eyebrow">Message</span><h3>{message.subject || message.id}</h3></div><button className="icon-button" onClick={onClose}><X size={17} /></button></header>
-      <div className="detail-actions"><button className="button secondary" onClick={onEdit}><CopyPlus size={14} /> Edit copy</button><button className="button primary" onClick={onRequeue}><Send size={14} /> Requeue</button></div>
+      {(onEdit || onRequeue || actions) && (
+        <div className="detail-actions">
+          {actions}
+          {onEdit && <button className="button secondary" onClick={onEdit}><CopyPlus size={14} /> Edit copy</button>}
+          {onRequeue && <button className="button primary" onClick={onRequeue}><Send size={14} /> Requeue</button>}
+        </div>
+      )}
       <section><h4>Body</h4><pre className="code-view">{body}</pre></section>
       <section><h4>System properties</h4><PropertyTable value={{ id: message.id, subject: message.subject, ...message.systemProperties }} /></section>
       <section><h4>Application properties</h4><PropertyTable value={message.applicationProperties ?? {}} /></section>

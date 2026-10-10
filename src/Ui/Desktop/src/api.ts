@@ -9,11 +9,14 @@ import type {
   SaveConnection,
   SendMessage,
   ServiceBusMessage,
+  StartTracking,
   SubQueue,
   SubscriptionDetails,
   SubscriptionInfo,
   TopicDetails,
   TopicStructure,
+  TrackingSession,
+  TrackingUpdates,
 } from "./types";
 
 interface BridgeResponse {
@@ -231,4 +234,13 @@ export const api = {
   jobs: () => request<BackgroundJob[]>("/api/v1/jobs/"),
   cancelJob: (id: string) =>
     request<void>(`/api/v1/jobs/${segment(id)}`, { method: "DELETE" }),
+  trackingSessions: () => request<TrackingSession[]>("/api/v1/tracking/sessions/"),
+  startTracking: (options: StartTracking) =>
+    request<TrackingSession>("/api/v1/tracking/sessions/", { method: "POST", body: options }),
+  trackingUpdates: (id: string, after: number) =>
+    request<TrackingUpdates>(`/api/v1/tracking/sessions/${segment(id)}/updates?after=${after}`),
+  stopTracking: (id: string) =>
+    request<TrackingSession>(`/api/v1/tracking/sessions/${segment(id)}/stop`, { method: "POST" }),
+  deleteTracking: (id: string) =>
+    request<void>(`/api/v1/tracking/sessions/${segment(id)}`, { method: "DELETE" }),
 };

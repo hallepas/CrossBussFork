@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   Plus,
+  Radar,
   Timer,
 } from "lucide-react";
 import { api } from "../api";
@@ -250,6 +251,18 @@ function ConnectionTree({
 
       {expanded && (
         <div className="tree-children">
+          <div className="tree-group">
+            <div className="tree-row group-row">
+              <button
+                className={`tree-label ${selection?.kind === "tracker" && selection.connectionName === connection.name ? "active" : ""}`}
+                onClick={() => onSelect({ kind: "tracker", connectionName: connection.name })}
+              >
+                <span className="tree-spacer" />
+                <Radar size={15} />
+                <span>Live tracker</span>
+              </button>
+            </div>
+          </div>
           <ResourceGroup
             label="Queues"
             icon={<ListTree size={15} />}

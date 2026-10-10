@@ -212,8 +212,87 @@ export interface BackgroundJob {
   completedAt?: string;
 }
 
+export type TrackedEntityKind = "Queue" | "Topic" | "Subscription";
+export type TrackedMessageSource = "Tap" | "Peek" | "DeadLetter";
+
+export interface StartTracking {
+  connectionName: string;
+  nameFilter?: string;
+  enableTopicTaps: boolean;
+  includeDeadLetter: boolean;
+  pollIntervalSeconds: number;
+}
+
+export interface TapStatus {
+  topicName: string;
+  subscriptionName: string;
+  state: "Creating" | "Active" | "Unauthorized" | "Failed";
+  error?: string;
+}
+
+export interface TrackingSession {
+  id: string;
+  connectionName: string;
+  nameFilter?: string;
+  enableTopicTaps: boolean;
+  includeDeadLetter: boolean;
+  pollIntervalSeconds: number;
+  status: "Starting" | "Running" | "Stopped" | "Failed";
+  error?: string;
+  startedAt: string;
+  stoppedAt?: string;
+  lastPollAt?: string;
+  watchedEntityCount: number;
+  droppedCount: number;
+  taps: TapStatus[];
+}
+
+export interface TrackedMessage {
+  cursor: number;
+  capturedAt: string;
+  entityPath: string;
+  entityKind: TrackedEntityKind;
+  entityName: string;
+  subscriptionName?: string;
+  source: TrackedMessageSource;
+  message: ServiceBusMessage;
+}
+
+export interface ActivityEvent {
+  cursor: number;
+  at: string;
+  entityPath: string;
+  entityKind: TrackedEntityKind;
+  activeDelta: number;
+  deadLetterDelta: number;
+  activeCount: number;
+  deadLetterCount: number;
+}
+
+export interface EntityActivity {
+  entityPath: string;
+  entityKind: TrackedEntityKind;
+  entityName: string;
+  subscriptionName?: string;
+  lastActivityAt: string;
+  activeCount: number;
+  deadLetterCount: number;
+  changeCount: number;
+  capturedCount: number;
+}
+
+export interface TrackingUpdates {
+  session: TrackingSession;
+  messages: TrackedMessage[];
+  events: ActivityEvent[];
+  entities: EntityActivity[];
+  nextCursor: number;
+  hasMore: boolean;
+}
+
 export type ResourceSelection =
   | { kind: "connection"; connectionName: string }
+  | { kind: "tracker"; connectionName: string }
   | { kind: "queue"; connectionName: string; name: string }
   | { kind: "topic"; connectionName: string; name: string }
   | {

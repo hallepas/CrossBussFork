@@ -6,6 +6,7 @@ using System.Text.Json.Serialization.Metadata;
 using CrossBusExplorer.Host;
 using CrossBusExplorer.Host.Endpoints;
 using CrossBusExplorer.Host.Jobs;
+using CrossBusExplorer.Host.Tracking;
 using CrossBusExplorer.Management;
 using CrossBusExplorer.ServiceBus;
 
@@ -27,6 +28,8 @@ builder.Services
     .AddManagement()
     .AddServiceBusServices()
     .AddSingleton<BackgroundJobManager>()
+    .AddSingleton<TrackingSessionManager>()
+    .AddHostedService(services => services.GetRequiredService<TrackingSessionManager>())
     .AddProblemDetails();
 builder.Services.AddCors(options => options.AddPolicy(
     "DesktopDevelopment",
@@ -83,6 +86,7 @@ api.MapConnectionEndpoints();
 api.MapEntityEndpoints();
 api.MapMessageEndpoints();
 api.MapJobEndpoints();
+api.MapTrackingEndpoints();
 
 await app.StartAsync();
 

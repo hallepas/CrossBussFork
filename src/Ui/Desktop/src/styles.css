@@ -222,6 +222,27 @@ button { color: inherit; }
 .row-actions button { min-height: 25px; border: 0; border-radius: 5px; padding: 0 5px; display: inline-grid; place-items: center; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; }
 .row-actions button:hover { color: var(--text); background: var(--surface-raised); }
 
+.tree-spacer { width: 14px; flex: 0 0 14px; }
+.receive-bar label.grow { flex: 1; }
+.receive-bar label.grow input { width: 100%; }
+.tracker-form { align-items: flex-end; flex-wrap: wrap; }
+.tracker-form .toggle { min-height: 33px; }
+.tracker-activity { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+.tracker-activity .message-table-wrap { max-height: calc(100vh - 420px); }
+.tracker-activity .data-table th { position: sticky; top: 0; }
+@media (max-width: 1100px) { .tracker-activity { grid-template-columns: 1fr; } }
+.message-table tbody tr { cursor: pointer; }
+.source-badge { border-radius: 8px; padding: 2px 6px; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--surface-raised); }
+.source-badge.tap { color: #9a6ae5; background: color-mix(in srgb, #9a6ae5 13%, var(--surface)); }
+.source-badge.peek { color: #4a7bd5; background: color-mix(in srgb, #4a7bd5 13%, var(--surface)); }
+.source-badge.deadletter { color: var(--danger); background: var(--danger-soft); }
+.capture-limits { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 12px; }
+.capture-limits summary { padding: 11px 14px; cursor: pointer; font-weight: 650; }
+.capture-limits-body { padding: 0 14px 12px; color: var(--muted); line-height: 1.55; }
+.capture-limits h4 { margin: 10px 0 4px; color: var(--text); font-size: 12px; }
+.capture-limits ul { margin: 0; padding-left: 18px; }
+.capture-limits code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+
 .messages-workspace { min-width: 0; }
 .message-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .toolbar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
